@@ -46,7 +46,12 @@ int main(int argc, char** argv){
             }
         }
     }
-    str.erase(str.end()-1);
+    if (str.size() != 0)
+        str.erase(str.end()-1);
+    else{
+        std::cout<< "Empty string"<< std::endl;
+        return 0;
+    }
     std::vector<thr> threads(tt);
     int pi[str.size()];
     PiArray(str, pi);
