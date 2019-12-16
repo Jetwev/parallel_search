@@ -58,6 +58,7 @@ int main(int argc, char** argv){
     for (int i = 0; i < tt; i++){
         threads[i].str_t = str;
         threads[i].pi = pi;
+        pthread_mutex_init(&threads[i].m, NULL);
     }
        
     for( int i = 0; i < tt;i ++)
