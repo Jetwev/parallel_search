@@ -4,7 +4,6 @@
 #include<vector>
 #include<string>
 #include<string.h>
-#include<algorithm>
 #include<unistd.h>
 #include<sys/types.h>
 #include<pthread.h>
@@ -16,14 +15,17 @@ struct thr{
     int a = 0;
     int end = 0;
     pthread_mutex_t m;
+    int* pi;
 };
 
 void listdir(std::string name,int strict_g, std::vector<thr>& threads, int N);
 void *findstr(void* arg);
+void PiArray(std::string, int*);
+void KMPSearch(struct thr*, std::string, int);
 
 int main(int argc, char** argv){
     std::string direct = ".", str, t;
-    int tt = 1;//the number of streams
+    int tt = 1;//кол-во потоков
     int strict = 0;
     int end = 0;
     for(int i = 1; i < argc; i++){
@@ -46,9 +48,13 @@ int main(int argc, char** argv){
     }
     str.erase(str.end()-1);
     std::vector<thr> threads(tt);
-    std::vector<std::string> thr_strings(tt);
-    for (int i = 0; i < tt; i++)
+    int pi[str.size()];
+    PiArray(str, pi);
+    for (int i = 0; i < tt; i++){
         threads[i].str_t = str;
+        threads[i].pi = pi;
+    }
+       
     for( int i = 0; i < tt;i ++)
         pthread_create(&threads[i].thread, NULL, findstr,&threads[i]);
     listdir(direct,strict,threads, tt);
@@ -72,9 +78,29 @@ int main(int argc, char** argv){
         pthread_join(threads[i].thread, NULL);
     }
     return 0;
-    //std::cout<< std::endl << tt << std::endl  << str << std::endl;
 }
 
+void PiArray(std::string pat, int* pi)//формирование массива pref_suf
+{ 
+    int j = 0; 
+    pi[0] = 0; 
+    int i = 1; 
+    while (i < pat.size()) { 
+        if (pat[i] == pat[j]) { 
+            j++; 
+            pi[i] = j; 
+            i++; 
+        } 
+        else
+            if (j != 0)
+                j = pi[j - 1];
+            else
+            { 
+                pi[i] = 0; 
+                i++; 
+            } 
+    } 
+}
 
 void listdir(std::string name,int strict_g, std::vector<thr>& threads, int N)
 {
@@ -131,15 +157,38 @@ void *findstr(void* arg){
                     if (strstr(buf, "\n")){
                         number++;
                     }
-                    if (strstr(buf, (*(struct thr*)arg).str_t.c_str())){  
-                        printf("%s\n%d\n%s\n", (*(struct thr*)arg).path.c_str(), number, buf);
-                        printf("\n");
-                        break;
-                    }
+                    //kmp алгоритм
+                    KMPSearch((struct thr*)arg, buf, number);
                 }
                 number = 0;
                 (*(struct thr*)arg).a = 0;
                 fclose(fp);
         }
     }
+}
+
+void KMPSearch(struct thr* tr, std::string str, int number) //поиск образа в строке
+{ 
+    int M = (*tr).str_t.size(); 
+    int N = str.size();
+    int i = 0; // индекс str
+    int j = 0; // индекс pat
+    while (i < N) { 
+        if ((*tr).str_t[j] == str[i]) { 
+            j++; 
+            i++; 
+        } 
+        if (j == M) { 
+            //образ найден, вывод
+            printf("%s\n%d\n%s\n", (*tr).path.c_str(), number, str.c_str());
+            printf("\n"); 
+            break;
+        } 
+        else if (i < N && (*tr).str_t[j] != str[i]) {
+            if (j != 0) 
+                j = (*tr).pi[j - 1]; 
+            else
+                i = i + 1; 
+        } 
+    } 
 }
