@@ -60,7 +60,6 @@ int main(int argc, char** argv){
         threads[i].pi = pi;
         pthread_mutex_init(&threads[i].m, NULL);
         pthread_mutex_lock(&threads[i].m);
-        
     }
        
     for( int i = 0; i < tt;i ++)
