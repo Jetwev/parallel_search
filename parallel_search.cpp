@@ -59,6 +59,8 @@ int main(int argc, char** argv){
         threads[i].str_t = str;
         threads[i].pi = pi;
         pthread_mutex_init(&threads[i].m, NULL);
+        pthread_mutex_lock(&threads[i].m);
+        
     }
        
     for( int i = 0; i < tt;i ++)
@@ -157,8 +159,7 @@ void *findstr(void* arg){
     char buf[1025];
     int number = 0;
     while((*(struct thr*)arg).end != 2){
-        pthread_mutex_lock(&(*(struct thr*)arg).m);
-            if(((*(struct thr*)arg).end != 2) && (fp = fopen((*(struct thr*)arg).path.c_str(), "r"))){
+            if(((*(struct thr*)arg).a == 1) && (fp = fopen((*(struct thr*)arg).path.c_str(), "r"))){
                 while (fgets(buf, 1024, fp) != NULL){
                     if (strstr(buf, "\n")){
                         number++;
@@ -169,6 +170,7 @@ void *findstr(void* arg){
                 number = 0;
                 (*(struct thr*)arg).a = 0;
                 fclose(fp);
+
         }
     }
 }
