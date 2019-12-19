@@ -7,27 +7,31 @@
 #include<unistd.h>
 #include<sys/types.h>
 #include<pthread.h>
+#include<deque>
 
 struct thr{
     pthread_t thread;
     std::string str_t;
     std::string path;
-    int a = 0;
     int end = 0;
-    pthread_mutex_t m;
+    pthread_mutex_t* m;
     int* pi;
+    std::deque<std::string>* q;
 };
 
-void listdir(std::string name,int strict_g, std::vector<thr>& threads, int N);
+void listdir(std::string name,int strict_g, std::vector<thr>& threads, int N, std::deque<std::string>*, pthread_mutex_t*);
 void *findstr(void* arg);
 void PiArray(std::string, int*);
-void KMPSearch(struct thr*, std::string, int);
+int KMPSearch(struct thr*, std::string, int);
 
 int main(int argc, char** argv){
     std::string direct = ".", str, t;
     int tt = 1;//кол-во потоков
     int strict = 0;
     int end = 0;
+    std::deque<std::string> q;
+    pthread_mutex_t m;
+    pthread_mutex_init(&m, NULL);
     for(int i = 1; i < argc; i++){
         if (argv[i][0] == '$')
             direct = argv[i] + 1;
@@ -58,30 +62,16 @@ int main(int argc, char** argv){
     for (int i = 0; i < tt; i++){
         threads[i].str_t = str;
         threads[i].pi = pi;
-        pthread_mutex_init(&threads[i].m, NULL);
-        pthread_mutex_lock(&threads[i].m);
+        threads[i].m = &m;
+        threads[i].q = &q;
     }
        
     for( int i = 0; i < tt;i ++)
         pthread_create(&threads[i].thread, NULL, findstr,&threads[i]);
-    listdir(direct,strict,threads, tt);
-    for(int i = 0; i < tt;){
-        if(threads[i].a == 0){ 
-            threads[i].end = 2;
-            end++;
-        }
-        i++;
-        if (i == tt){
-            if (end != tt){
-                i = i % tt;
-                end = 0;
-            }
-            else
-                break;
-        }
-    }
+    listdir(direct,strict,threads, tt, &q, &m);
+    for(int i = 0; i < tt; i++)
+        threads[i].end = 2;
     for(int i = 0; i < tt; i++){
-        pthread_mutex_unlock(&threads[i].m);
         pthread_join(threads[i].thread, NULL);
     }
     return 0;
@@ -109,7 +99,7 @@ void PiArray(std::string pat, int* pi)//формирование массива 
     } 
 }
 
-void listdir(std::string name,int strict_g, std::vector<thr>& threads, int N)
+void listdir(std::string name,int strict_g, std::vector<thr>& threads, int N, std::deque<std::string>* q, pthread_mutex_t* m)
 {
     DIR *dir;
     struct dirent *entry;
@@ -126,27 +116,16 @@ void listdir(std::string name,int strict_g, std::vector<thr>& threads, int N)
             path += '/';
             path += entry->d_name;
             if (strict_g == 0)
-                listdir(path, strict_g, threads, N);
+                listdir(path, strict_g, threads, N, q, m);
         } else {
             if (entry->d_type == DT_REG){
                 std::string p;
                 p = name;
                 p += "/";
                 p += entry->d_name;
-                while(1)
-                {
-                    if (i >= N) i = 0;
-                    if(threads[i].a == 1){
-                        i++;
-                        continue;
-                    }
-                    else{
-                        threads[i].path = p;
-                        threads[i].a = 1;
-                        pthread_mutex_unlock(&threads[i].m);
-                        break;
-                    }
-                }
+                pthread_mutex_lock(m);
+                (*q).push_front(p);
+                pthread_mutex_unlock(m);
             }
         }
     }
@@ -156,25 +135,33 @@ void listdir(std::string name,int strict_g, std::vector<thr>& threads, int N)
 void *findstr(void* arg){
     FILE* fp;
     char buf[1025];
-    int number = 0;
-    while((*(struct thr*)arg).end != 2){
-            if(((*(struct thr*)arg).a == 1) && (fp = fopen((*(struct thr*)arg).path.c_str(), "r"))){
-                while (fgets(buf, 1024, fp) != NULL){
+    int number = 0, flag = 0;
+    while((*(struct thr*)arg).end != 2 || !(*(*(struct thr*)arg).q).empty()){
+        pthread_mutex_lock((*(struct thr*)arg).m);
+        if (!(*(*(struct thr*)arg).q).empty()){
+            flag = 1;
+            (*(struct thr*)arg).path = (*(*(struct thr*)arg).q).back();
+            (*(*(struct thr*)arg).q).pop_back(); 
+        }
+        pthread_mutex_unlock((*(struct thr*)arg).m);
+        if(flag == 1 && (fp = fopen((*(struct thr*)arg).path.c_str(), "r"))){
+            while (fgets(buf, 1024, fp) != NULL){
                     if (strstr(buf, "\n")){
                         number++;
                     }
                     //kmp алгоритм
-                    KMPSearch((struct thr*)arg, buf, number);
+                    if(KMPSearch((struct thr*)arg, buf, number))
+                        break;
                 }
                 number = 0;
-                (*(struct thr*)arg).a = 0;
                 fclose(fp);
-
-        }
+            }
+        flag = 0;
     }
+    
 }
 
-void KMPSearch(struct thr* tr, std::string str, int number) //поиск образа в строке
+int KMPSearch(struct thr* tr, std::string str, int number) //поиск образа в строке
 { 
     int M = (*tr).str_t.size(); 
     int N = str.size();
@@ -188,8 +175,8 @@ void KMPSearch(struct thr* tr, std::string str, int number) //поиск обр�
         if (j == M) { 
             //образ найден, вывод
             printf("%s\n%d\n%s\n", (*tr).path.c_str(), number, str.c_str());
-            printf("\n"); 
-            break;
+            printf("\n");
+            return 1;
         } 
         else if (i < N && (*tr).str_t[j] != str[i]) {
             if (j != 0) 
@@ -197,5 +184,6 @@ void KMPSearch(struct thr* tr, std::string str, int number) //поиск обр�
             else
                 i = i + 1; 
         } 
-    } 
+    }
+    return 0;
 }
