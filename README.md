@@ -1,1 +1,1 @@
-B. Artyom, DCAM, 871
+This is a program for parallel search of strings in files. C++ threads are used for parallel search. The main thread collects all file paths into a shared queue (deque is used) where the others block the queue using a mutex, take the path to the file and unlock it. To search for a string in a file, the KMP algorithm is used, which complexity is O(n+k), where n is the length of the file, and k is the length of the string. All the necessary information (path and number of threads) is taken from the command line.
